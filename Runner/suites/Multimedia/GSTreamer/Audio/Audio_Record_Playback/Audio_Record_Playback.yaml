@@ -22,8 +22,19 @@ run:
   steps:
     - REPO_PATH="$PWD"
     - cd Runner/suites/Multimedia/GSTreamer/Audio/Audio_Record_Playback/
-    - AUDIO_SHARED_ENCODE_DIR="${REPO_PATH%%/tests/*}/shared/audio-record-playback"
-    - export AUDIO_TEST_MODE AUDIO_TEST_NAME AUDIO_FORMATS AUDIO_DURATION AUDIO_GST_DEBUG AUDIO_SHARED_ENCODE_DIR
+    - |
+      # Set shared directory to a fixed location outside test-specific paths
+      # This ensures all tests (regardless of LAVA test number) use the same directory
+      if [ -d "/home" ]; then
+        # LAVA environment: use /home/shared
+        AUDIO_SHARED_ENCODE_DIR="/home/shared/audio-record-playback"
+      else
+        # Local/non-LAVA: use standard shared path
+        AUDIO_SHARED_ENCODE_DIR="${REPO_PATH%%/tests/*}/shared/audio-record-playback"
+      fi
+      mkdir -p "$AUDIO_SHARED_ENCODE_DIR" || true
+      export AUDIO_SHARED_ENCODE_DIR
+    - export AUDIO_TEST_MODE AUDIO_TEST_NAME AUDIO_FORMATS AUDIO_DURATION AUDIO_GST_DEBUG
     - |
       # Build command based on whether test-name is specified
       if [ -n "${AUDIO_TEST_NAME}" ]; then
