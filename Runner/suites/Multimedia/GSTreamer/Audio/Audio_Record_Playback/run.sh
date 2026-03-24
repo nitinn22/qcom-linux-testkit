@@ -47,8 +47,10 @@ OUTDIR="$LOG_DIR/$TESTNAME"
 GST_LOG="$OUTDIR/gst.log"
 DMESG_DIR="$OUTDIR/dmesg"
 
-# Use the shared recorded directory if supported; otherwise default to $OUTDIR/recorded.
-if command -v gstreamer_shared_recorded_dir >/dev/null 2>&1; then
+# Use the shared recorded directory if AUDIO_SHARED_ENCODE_DIR is set; otherwise use function or default.
+if [ -n "${AUDIO_SHARED_ENCODE_DIR:-}" ]; then
+    RECORDED_DIR="$AUDIO_SHARED_ENCODE_DIR"
+elif command -v gstreamer_shared_recorded_dir >/dev/null 2>&1; then
     RECORDED_DIR="$(gstreamer_shared_recorded_dir "$SCRIPT_DIR" "$OUTDIR")"
 else
     RECORDED_DIR="$OUTDIR/recorded"
