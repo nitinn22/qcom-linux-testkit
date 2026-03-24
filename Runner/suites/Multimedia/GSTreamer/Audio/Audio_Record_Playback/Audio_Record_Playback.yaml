@@ -13,6 +13,7 @@ metadata:
  
 params:
   AUDIO_TEST_MODE: "all"
+  AUDIO_TEST_NAME: ""
   AUDIO_FORMATS: "wav,flac"
   AUDIO_DURATION: "10"
   AUDIO_GST_DEBUG: "2"
@@ -22,6 +23,14 @@ run:
     - REPO_PATH="$PWD"
     - cd Runner/suites/Multimedia/GSTreamer/Audio/Audio_Record_Playback/
     - AUDIO_SHARED_ENCODE_DIR="${REPO_PATH%%/tests/*}/shared/audio-record-playback"
-    - export AUDIO_TEST_MODE AUDIO_FORMATS AUDIO_DURATION AUDIO_GST_DEBUG AUDIO_SHARED_ENCODE_DIR
-    - ./run.sh --mode "${AUDIO_TEST_MODE}" --formats "${AUDIO_FORMATS}" --duration "${AUDIO_DURATION}" --gst-debug "${AUDIO_GST_DEBUG}" || true
+    - export AUDIO_TEST_MODE AUDIO_TEST_NAME AUDIO_FORMATS AUDIO_DURATION AUDIO_GST_DEBUG AUDIO_SHARED_ENCODE_DIR
+    - |
+      # Build command based on whether test-name is specified
+      if [ -n "${AUDIO_TEST_NAME}" ]; then
+        # Individual test mode
+        ./run.sh --test-name "${AUDIO_TEST_NAME}" --duration "${AUDIO_DURATION}" --gst-debug "${AUDIO_GST_DEBUG}" || true
+      else
+        # Grouped test mode (original behavior)
+        ./run.sh --mode "${AUDIO_TEST_MODE}" --formats "${AUDIO_FORMATS}" --duration "${AUDIO_DURATION}" --gst-debug "${AUDIO_GST_DEBUG}" || true
+      fi
     - $REPO_PATH/Runner/utils/send-to-lava.sh Audio_Record_Playback.res

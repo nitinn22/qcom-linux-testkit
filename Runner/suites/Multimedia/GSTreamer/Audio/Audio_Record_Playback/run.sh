@@ -102,6 +102,7 @@ total_tests=0
 
 # -------------------- Defaults (LAVA env vars -> defaults; CLI overrides) --------------------
 testMode="${AUDIO_TEST_MODE:-all}"
+testName="${AUDIO_TEST_NAME:-}"
 formatList="${AUDIO_FORMATS:-wav,flac}"
 duration="${AUDIO_DURATION:-${RUNTIMESEC:-10}}"
 gstDebugLevel="${AUDIO_GST_DEBUG:-${GST_DEBUG_LEVEL:-2}}"
@@ -223,6 +224,16 @@ while [ $# -gt 0 ]; do
       shift 2
       ;;
 
+    --test-name)
+      if [ $# -lt 2 ] || [ "${2#--}" != "$2" ]; then
+        log_warn "Missing/invalid value for --test-name"
+        echo "$TESTNAME SKIP" >"$RES_FILE"
+        exit 0
+      fi
+      [ -n "$2" ] && testName="$2"
+      shift 2
+      ;;
+
     -h|--help)
       cat <<EOF
 Usage: $0 [OPTIONS]
@@ -334,6 +345,25 @@ case "$duration" in
     fi
     ;;
 esac
+
+# Validate test name if provided
+if [ -n "$testName" ]; then
+  case "$testName" in
+    record_wav|record_flac|record_pulsesrc_wav|record_pulsesrc_flac|\
+    playback_wav|playback_flac|playback_pulsesrc_wav|playback_pulsesrc_flac|\
+    playback_sample_ogg|playback_sample_mp3)
+      log_info "Test name: $testName (individual test mode)"
+      ;;
+    *)
+      log_warn "Invalid --test-name '$testName'"
+      log_warn "Valid names: record_wav, record_flac, record_pulsesrc_wav, record_pulsesrc_flac,"
+      log_warn "             playback_wav, playback_flac, playback_pulsesrc_wav, playback_pulsesrc_flac,"
+      log_warn "             playback_sample_ogg, playback_sample_mp3"
+      echo "$TESTNAME SKIP" >"$RES_FILE"
+      exit 0
+      ;;
+  esac
+fi
 
 # -------------------- Pre-checks --------------------
 check_dependencies "gst-launch-1.0 gst-inspect-1.0 awk grep head sed tr stat find curl tar" >/dev/null 2>&1 || {
@@ -824,59 +854,109 @@ if ! check_required_elements; then
 fi
 log_info "Required GStreamer elements verified"
 
-# Provision Test files for OGG/MP3 playback tests
-provision_test_files
-
 # Parse format list
 formats=$(printf '%s' "$formatList" | tr ',' ' ')
 
-# Run ALL record/encode tests first (4 tests total)
-if [ "$testMode" = "all" ] || [ "$testMode" = "record" ]; then
+# -------------------- Individual Test Mode --------------------
+if [ -n "$testName" ]; then
+  # Only provision test files if running OGG/MP3 playback tests
+  case "$testName" in
+    playback_sample_ogg|playback_sample_mp3)
+      provision_test_files
+      ;;
+  esac
   log_info "=========================================="
-  log_info "RECORD TESTS"
+  log_info "INDIVIDUAL TEST MODE: $testName"
   log_info "=========================================="
-
-  # 1. Record with audiotestsrc (2 tests: wav, flac)
-  log_info "Recording with audiotestsrc..."
-  for fmt in $formats; do
-    total_tests=$((total_tests + 1))
-    run_record_test "$fmt" || true
-  done
-
-  # 2. Record with pulsesrc HW (2 tests: wav, flac)
-  log_info "Recording with pulsesrc HW..."
-  for fmt in $formats; do
-    total_tests=$((total_tests + 1))
-    run_record_pulsesrc_test "$fmt" || true
-  done
-fi
-
-# Run ALL playback/decode tests after recording (4 tests total)
-if [ "$testMode" = "all" ] || [ "$testMode" = "playback" ]; then
-  log_info "=========================================="
-  log_info "PLAYBACK TESTS"
-  log_info "=========================================="
-
-  # 3. Playback audiotestsrc recordings (2 tests: wav, flac)
-  log_info "Playing back audiotestsrc recordings..."
-  for fmt in $formats; do
-    total_tests=$((total_tests + 1))
-    run_playback_test "$fmt" || true
-  done
-
-  # 4. Playback pulsesrc recordings (2 tests: wav, flac)
-  log_info "Playing back pulsesrc recordings..."
-  for fmt in $formats; do
-    total_tests=$((total_tests + 1))
-    run_playback_pulsesrc_test "$fmt" || true
-  done
   
-  # 5. Playback Test files (2 tests: ogg, mp3)
-  log_info "Playing back Test files (OGG/MP3)..."
-  for fmt in ogg mp3; do
-    total_tests=$((total_tests + 1))
-    run_playback_ogg_mp3_test "$fmt" || true
-  done
+  total_tests=1
+  
+  case "$testName" in
+    record_wav)
+      run_record_test "wav" || true
+      ;;
+    record_flac)
+      run_record_test "flac" || true
+      ;;
+    record_pulsesrc_wav)
+      run_record_pulsesrc_test "wav" || true
+      ;;
+    record_pulsesrc_flac)
+      run_record_pulsesrc_test "flac" || true
+      ;;
+    playback_wav)
+      run_playback_test "wav" || true
+      ;;
+    playback_flac)
+      run_playback_test "flac" || true
+      ;;
+    playback_pulsesrc_wav)
+      run_playback_pulsesrc_test "wav" || true
+      ;;
+    playback_pulsesrc_flac)
+      run_playback_pulsesrc_test "flac" || true
+      ;;
+    playback_sample_ogg)
+      run_playback_ogg_mp3_test "ogg" || true
+      ;;
+    playback_sample_mp3)
+      run_playback_ogg_mp3_test "mp3" || true
+      ;;
+  esac
+  
+# -------------------- Grouped Test Mode (Original) --------------------
+else
+  # Run ALL record/encode tests first (4 tests total)
+  if [ "$testMode" = "all" ] || [ "$testMode" = "record" ]; then
+    log_info "=========================================="
+    log_info "RECORD TESTS"
+    log_info "=========================================="
+
+    # 1. Record with audiotestsrc (2 tests: wav, flac)
+    log_info "Recording with audiotestsrc..."
+    for fmt in $formats; do
+      total_tests=$((total_tests + 1))
+      run_record_test "$fmt" || true
+    done
+
+    # 2. Record with pulsesrc HW (2 tests: wav, flac)
+    log_info "Recording with pulsesrc HW..."
+    for fmt in $formats; do
+      total_tests=$((total_tests + 1))
+      run_record_pulsesrc_test "$fmt" || true
+    done
+  fi
+
+  # Run ALL playback/decode tests after recording (6 tests total)
+  if [ "$testMode" = "all" ] || [ "$testMode" = "playback" ]; then
+    # Provision test files only when running playback tests
+    provision_test_files
+    
+    log_info "=========================================="
+    log_info "PLAYBACK TESTS"
+    log_info "=========================================="
+
+    # 3. Playback audiotestsrc recordings (2 tests: wav, flac)
+    log_info "Playing back audiotestsrc recordings..."
+    for fmt in $formats; do
+      total_tests=$((total_tests + 1))
+      run_playback_test "$fmt" || true
+    done
+
+    # 4. Playback pulsesrc recordings (2 tests: wav, flac)
+    log_info "Playing back pulsesrc recordings..."
+    for fmt in $formats; do
+      total_tests=$((total_tests + 1))
+      run_playback_pulsesrc_test "$fmt" || true
+    done
+    
+    # 5. Playback Test files (2 tests: ogg, mp3)
+    log_info "Playing back Test files (OGG/MP3)..."
+    for fmt in ogg mp3; do
+      total_tests=$((total_tests + 1))
+      run_playback_ogg_mp3_test "$fmt" || true
+    done
+  fi
 fi
 
 # -------------------- Dmesg error scan --------------------
