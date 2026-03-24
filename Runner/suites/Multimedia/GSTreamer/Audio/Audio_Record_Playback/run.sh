@@ -48,8 +48,8 @@ GST_LOG="$OUTDIR/gst.log"
 DMESG_DIR="$OUTDIR/dmesg"
 
 # Use the shared recorded directory if supported; otherwise default to $OUTDIR/recorded.
-if command -v gstreamer_shared_encoded_dir >/dev/null 2>&1; then
-    RECORDED_DIR="$(gstreamer_shared_encoded_dir "$SCRIPT_DIR" "$OUTDIR")"
+if command -v gstreamer_shared_recorded_dir >/dev/null 2>&1; then
+    RECORDED_DIR="$(gstreamer_shared_recorded_dir "$SCRIPT_DIR" "$OUTDIR")"
 else
     RECORDED_DIR="$OUTDIR/recorded"
 fi
