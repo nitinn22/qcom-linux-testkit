@@ -5,6 +5,8 @@
 # Tests video playback using waylandsink with videotestsrc
 # Validates Weston/Wayland server and display connectivity
 # CI/LAVA-friendly (always exits 0, writes .res file)
+#
+# Runs 4 tests at different resolutions: 480p, 720p, 1080p, 2160p
 
 SCRIPT_DIR="$(
   cd "$(dirname "$0")" || exit 1
@@ -14,14 +16,9 @@ SCRIPT_DIR="$(
 TESTNAME="Waylandsink_Playback"
 RES_FILE="${SCRIPT_DIR}/${TESTNAME}.res"
 LOG_DIR="${SCRIPT_DIR}/logs"
-OUTDIR="$LOG_DIR/$TESTNAME"
-GST_LOG="$OUTDIR/gst.log"
-RUN_LOG="$OUTDIR/run.log"
 
-mkdir -p "$OUTDIR" >/dev/null 2>&1 || true
+mkdir -p "$LOG_DIR" >/dev/null 2>&1 || true
 : >"$RES_FILE"
-: >"$GST_LOG"
-: >"$RUN_LOG"
 
 SCRIPT_DIR="$(
   cd "$(dirname "$0")" || exit 1
@@ -59,9 +56,6 @@ fi
 # shellcheck disable=SC1091
 [ -f "$TOOLS/lib_display.sh" ] && . "$TOOLS/lib_display.sh"
 
-result="FAIL"
-reason="unknown"
-
 # -------------------- Defaults --------------------
 # Validate environment variables if set
 if [ -n "${VIDEO_DURATION:-}" ] && ! echo "$VIDEO_DURATION" | grep -q "^[0-9]\+$"; then
@@ -87,10 +81,10 @@ fi
 
 duration="${VIDEO_DURATION:-${RUNTIMESEC:-30}}"
 pattern="${VIDEO_PATTERN:-smpte}"
-width="${VIDEO_WIDTH:-1920}"
-height="${VIDEO_HEIGHT:-1080}"
 framerate="${VIDEO_FRAMERATE:-30}"
 gstDebugLevel="${VIDEO_GST_DEBUG:-${GST_DEBUG_LEVEL:-2}}"
+lava_testcase_id="${LAVA_TESTCASE_ID:-Waylandsink_Playback}"
+resolution_list=""
 
 # shellcheck disable=SC2317
 cleanup() {
@@ -110,24 +104,20 @@ while [ $# -gt 0 ]; do
         echo "$TESTNAME SKIP" >"$RES_FILE"
         exit 0
       fi
-      # Parse and validate WIDTHxHEIGHT format (e.g., 1920x1080)
       if [ -n "$2" ]; then
-        # Validate format contains 'x'
-        if ! echo "$2" | grep -q "x"; then
-          log_warn "Invalid resolution format '$2' - must be WIDTHxHEIGHT"
-          echo "$TESTNAME SKIP" >"$RES_FILE"
-          exit 0
-        fi
-        
-        width="${2%%x*}"
-        height="${2#*x}"
-        
-        # Validate both width and height are numeric
-        if ! echo "$width" | grep -q "^[0-9]\+$" || ! echo "$height" | grep -q "^[0-9]\+$"; then
-          log_warn "Width and height must be numeric values (got width='$width', height='$height')"
-          echo "$TESTNAME SKIP" >"$RES_FILE"
-          exit 0
-        fi
+        resolution_list="$2"
+      fi
+      shift 2
+      ;;
+
+    --lava-testcase-id)
+      if [ $# -lt 2 ] || [ "${2#--}" != "$2" ]; then
+        log_warn "Missing/invalid value for --lava-testcase-id"
+        echo "$TESTNAME SKIP" >"$RES_FILE"
+        exit 0
+      fi
+      if [ -n "$2" ]; then
+        lava_testcase_id="$2"
       fi
       shift 2
       ;;
@@ -157,42 +147,6 @@ while [ $# -gt 0 ]; do
       fi
       # If $2 is empty, keep default and shift 2
       [ -n "$2" ] && pattern="$2"
-      shift 2
-      ;;
-
-    --width)
-      if [ $# -lt 2 ] || [ "${2#--}" != "$2" ]; then
-        log_warn "Missing/invalid value for --width"
-        echo "$TESTNAME SKIP" >"$RES_FILE"
-        exit 0
-      fi
-      # Validate width is numeric
-      if [ -n "$2" ]; then
-        if ! echo "$2" | grep -q "^[0-9]\+$"; then
-          log_warn "Width must be a numeric value (got '$2')"
-          echo "$TESTNAME SKIP" >"$RES_FILE"
-          exit 0
-        fi
-        width="$2"
-      fi
-      shift 2
-      ;;
-
-    --height)
-      if [ $# -lt 2 ] || [ "${2#--}" != "$2" ]; then
-        log_warn "Missing/invalid value for --height"
-        echo "$TESTNAME SKIP" >"$RES_FILE"
-        exit 0
-      fi
-      # Validate height is numeric
-      if [ -n "$2" ]; then
-        if ! echo "$2" | grep -q "^[0-9]\+$"; then
-          log_warn "Height must be a numeric value (got '$2')"
-          echo "$TESTNAME SKIP" >"$RES_FILE"
-          exit 0
-        fi
-        height="$2"
-      fi
       shift 2
       ;;
 
@@ -233,10 +187,13 @@ while [ $# -gt 0 ]; do
 Usage:
   $0 [options]
 
+Runs 4 tests at standard resolutions: 480p, 720p, 1080p, 2160p
+
 Options:
-  --resolution <WIDTHxHEIGHT>
-      Video resolution (e.g., 1920x1080, 3840x2160)
-      Default: ${width}x${height}
+  --resolution <list>
+      Comma-separated list of resolutions (e.g., "480p,720p,1080p,2160p")
+      Supported named resolutions: 480p, 720p, 1080p, 2160p
+      Default: 480p,720p,1080p,2160p
 
   --duration <seconds>
       Playback duration in seconds
@@ -246,14 +203,6 @@ Options:
       videotestsrc pattern
       Default: ${pattern}
 
-  --width <pixels>
-      Video width (alternative to --resolution)
-      Default: ${width}
-
-  --height <pixels>
-      Video height (alternative to --resolution)
-      Default: ${height}
-
   --framerate <fps>
       Video framerate
       Default: ${framerate}
@@ -262,18 +211,19 @@ Options:
       Sets GST_DEBUG=<level> (1-9)
       Default: ${gstDebugLevel}
 
+  --lava-testcase-id <id>
+      LAVA testcase ID prefix for result reporting
+      Default: ${lava_testcase_id}
+
 Examples:
-  # Run default test (1920x1080 SMPTE pattern for 30s)
+  # Run default 4 tests (480p, 720p, 1080p, 2160p)
   ./run.sh
 
-  # Run with custom resolution and duration
-  ./run.sh --resolution 3840x2160 --duration 20
+  # Run specific resolutions
+  ./run.sh --resolution "480p,1080p"
 
-  # Run with different pattern
-  ./run.sh --pattern ball
-
-  # Run with separate width/height
-  ./run.sh --width 1280 --height 720
+  # Run with LAVA testcase ID
+  ./run.sh --resolution "480p,720p" --lava-testcase-id "Waylandsink_Playback"
 
 EOF
       echo "$TESTNAME SKIP" >"$RES_FILE"
@@ -288,25 +238,160 @@ EOF
   esac
 done
 
-# Basic sanity
-if [ "$duration" -le 0 ] || [ "$width" -le 0 ] || [ "$height" -le 0 ] || [ "$framerate" -le 0 ]; then
-  log_warn "Invalid parameters: duration=$duration width=$width height=$height framerate=$framerate"
-  echo "$TESTNAME SKIP" >"$RES_FILE"
-  exit 0
-fi
+# ==================== FUNCTION: Run display test at specified resolution ====================
+run_display_test() {
+  test_width="$1"
+  test_height="$2"
+  test_name="$3"
+  
+  OUTDIR="$LOG_DIR/${test_name}"
+  GST_LOG="$OUTDIR/gst.log"
+  RUN_LOG="$OUTDIR/run.log"
+  
+  mkdir -p "$OUTDIR" >/dev/null 2>&1 || true
+  : >"$GST_LOG"
+  : >"$RUN_LOG"
+  
+  # Basic sanity
+  if [ "$duration" -le 0 ] || [ "$test_width" -le 0 ] || [ "$test_height" -le 0 ] || [ "$framerate" -le 0 ]; then
+    log_warn "Invalid parameters: duration=$duration width=$test_width height=$test_height framerate=$framerate"
+    return 2  # SKIP
+  fi
+  
+  log_info "Test: $test_name"
+  log_info "Duration: ${duration}s, Resolution: ${test_width}x${test_height}, Framerate: ${framerate}fps"
+  log_info "Pattern: $pattern"
+  log_info "GST debug: GST_DEBUG=$gstDebugLevel"
+  log_info "Logs: $OUTDIR"
+  
+  # -------------------- GStreamer debug capture --------------------
+  export GST_DEBUG_NO_COLOR=1
+  export GST_DEBUG="$gstDebugLevel"
+  export GST_DEBUG_FILE="$GST_LOG"
+  
+  # -------------------- Build and run pipeline --------------------
+  num_buffers=$((duration * framerate))
+  
+  pipeline="videotestsrc is-live=true num-buffers=${num_buffers} pattern=${pattern} ! video/x-raw,width=${test_width},height=${test_height},framerate=${framerate}/1 ! videoconvert ! waylandsink"
+  
+  log_info "Pipeline: $pipeline"
+  
+  # Run with timeout
+  start_ts=$(date +%s)
+  timeout_sec=$((duration + 15))
+  
+  if gstreamer_run_gstlaunch_timeout "$timeout_sec" "$pipeline" >>"$RUN_LOG" 2>&1; then
+    gstRc=0
+  else
+    gstRc=$?
+  fi
+  
+  end_ts=$(date +%s)
+  elapsed=$((end_ts - start_ts))
+  
+  log_info "Playback finished: rc=${gstRc} elapsed=${elapsed}s"
+  
+  # -------------------- Validation --------------------
+  if [ "$duration" -gt 2 ]; then
+    min_duration=$((duration - 2))
+  else
+    min_duration=0
+  fi
+  
+  # Check for GStreamer errors in both run log and GST debug log
+  run_log_ok=1
+  gst_log_ok=1
+  
+  # Validate run log
+  if ! gstreamer_validate_log "$RUN_LOG" "$test_name"; then
+    run_log_ok=0
+  fi
+  
+  # Validate last 1000 lines of GST debug log if it exists and has content
+  if [ -s "$GST_LOG" ]; then
+    tmp_tail=$(mktemp "${OUTDIR}/gst.tail.XXXXXX" 2>/dev/null || mktemp) || tmp_tail=""
+    if [ -n "$tmp_tail" ]; then
+      tail -n 1000 "$GST_LOG" >"$tmp_tail" 2>/dev/null || true
+      if ! gstreamer_validate_log "$tmp_tail" "$test_name"; then
+        gst_log_ok=0
+      fi
+      rm -f "$tmp_tail" >/dev/null 2>&1 || true
+    else
+      # If mktemp failed, fall back to validating the full GST log
+      if ! gstreamer_validate_log "$GST_LOG" "$test_name"; then
+        gst_log_ok=0
+      fi
+    fi
+    rm -f "${GST_LOG}.tail"
+  fi
+  
+  if [ "$run_log_ok" -eq 0 ] || [ "$gst_log_ok" -eq 0 ]; then
+    result="FAIL"
+    if [ "$run_log_ok" -eq 0 ] && [ "$gst_log_ok" -eq 0 ]; then
+      reason="GStreamer errors detected in both run log and GST debug log"
+    elif [ "$run_log_ok" -eq 0 ]; then
+      reason="GStreamer errors detected in run log"
+    else
+      reason="GStreamer errors detected in GST debug log"
+    fi
+  else
+    # First check if it ran long enough
+    if [ "$elapsed" -ge "$min_duration" ]; then
+      # If it ran long enough, check exit code
+      case "$gstRc" in
+        0)  # Normal exit
+          result="PASS"
+          reason="Playback completed successfully (elapsed=${elapsed}/${duration}s)"
+          ;;
+        124)
+          result="FAIL"
+          reason="Playback timed out (timeout=${timeout_sec}s, elapsed=${elapsed}s) - pipeline did not exit cleanly"
+          ;;
+        137|143)
+          result="FAIL"
+          reason="Playback killed by signal (rc=$gstRc, elapsed=${elapsed}s) - unexpected termination"
+          ;;
+        *)  # Unexpected return code
+          result="FAIL"
+          reason="Playback failed with unexpected exit code (rc=$gstRc, elapsed=${elapsed}/${duration}s)"
+          ;;
+      esac
+    else
+      # Didn't run long enough - always fail regardless of return code
+      result="FAIL"
+      reason="Playback exited too quickly (elapsed=${elapsed}s, minimum required=${min_duration}s)"
+    fi
+  fi
+  
+  # Helpful tails on failure (stdout visibility in CI)
+  if [ "$result" != "PASS" ]; then
+    log_info "---- gst-launch output (tail) ----"
+    tail -n 120 "$RUN_LOG" 2>/dev/null || true
+    if [ -s "$GST_LOG" ]; then
+      log_info "---- GST debug log (tail) ----"
+      tail -n 120 "$GST_LOG" 2>/dev/null || true
+    fi
+  fi
+  
+  # -------------------- Emit result --------------------
+  case "$result" in
+    PASS)
+      log_pass "$test_name $result: $reason"
+      return 0
+      ;;
+    *)
+      log_fail "$test_name $result: $reason"
+      return 1
+      ;;
+  esac
+}
 
-# -------------------- Pre-checks --------------------
+# ==================== PRE-CHECKS (Common for all tests) ====================
 check_dependencies "gst-launch-1.0 gst-inspect-1.0 grep head sed tail date mktemp" >/dev/null 2>&1 || {
   log_skip "Missing required tools (gst-launch-1.0, gst-inspect-1.0, grep, head, sed, tail, date, mktemp)"
   echo "$TESTNAME SKIP" >"$RES_FILE"
   exit 0
 }
-
-log_info "Test: $TESTNAME"
-log_info "Duration: ${duration}s, Resolution: ${width}x${height}, Framerate: ${framerate}fps"
-log_info "Pattern: $pattern"
-log_info "GST debug: GST_DEBUG=$gstDebugLevel"
-log_info "Logs: $OUTDIR"
 
 # -------------------- Display connectivity check --------------------
 if command -v display_debug_snapshot >/dev/null 2>&1; then
@@ -426,128 +511,90 @@ fi
 
 log_info "waylandsink element: available"
 
-# -------------------- GStreamer debug capture --------------------
-export GST_DEBUG_NO_COLOR=1
-export GST_DEBUG="$gstDebugLevel"
-export GST_DEBUG_FILE="$GST_LOG"
-
-# -------------------- Build and run pipeline --------------------
-# Make source real-time to match duration validation.
-num_buffers=$((duration * framerate))
-
-pipeline="videotestsrc is-live=true num-buffers=${num_buffers} pattern=${pattern} ! video/x-raw,width=${width},height=${height},framerate=${framerate}/1 ! videoconvert ! waylandsink"
-
-log_info "Pipeline: $pipeline"
-
-# Run with timeout
-start_ts=$(date +%s)
-
-# Give some slack, but timeout should still be treated as a real failure for this test
-timeout_sec=$((duration + 15))
-
-if gstreamer_run_gstlaunch_timeout "$timeout_sec" "$pipeline" >>"$RUN_LOG" 2>&1; then
-  gstRc=0
-else
-  gstRc=$?
+# ==================== RUN TESTS ====================
+# Use resolution_list if provided, otherwise default to 4 standard resolutions
+if [ -z "$resolution_list" ]; then
+  resolution_list="480p,720p,1080p,2160p"
 fi
 
-end_ts=$(date +%s)
-elapsed=$((end_ts - start_ts))
+# Convert comma-separated list to space-separated for iteration
+resolutions=$(echo "$resolution_list" | tr ',' ' ')
 
-log_info "Playback finished: rc=${gstRc} elapsed=${elapsed}s"
+# Count total tests
+total_tests=0
+for res in $resolutions; do
+  total_tests=$((total_tests + 1))
+done
 
-# -------------------- Validation --------------------
-if [ "$duration" -gt 2 ]; then
-  min_duration=$((duration - 2))
-else
-  min_duration=0
-fi
+log_info "=========================================="
+log_info "Running $total_tests resolution test(s)"
+log_info "Resolutions: $resolution_list"
+log_info "=========================================="
 
-# Check for GStreamer errors in both run log and GST debug log
-run_log_ok=1
-gst_log_ok=1
+passed_tests=0
+failed_tests=0
+test_num=0
 
-# Validate run log
-if ! gstreamer_validate_log "$RUN_LOG" "$TESTNAME"; then
-  run_log_ok=0
-fi
-
-# Validate last 1000 lines of GST debug log if it exists and has content
-if [ -s "$GST_LOG" ]; then
-  tmp_tail=$(mktemp "${OUTDIR}/gst.tail.XXXXXX" 2>/dev/null || mktemp) || tmp_tail=""
-  if [ -n "$tmp_tail" ]; then
-    tail -n 1000 "$GST_LOG" >"$tmp_tail" 2>/dev/null || true
-    if ! gstreamer_validate_log "$tmp_tail" "$TESTNAME"; then
-      gst_log_ok=0
-    fi
-    rm -f "$tmp_tail" >/dev/null 2>&1 || true
+  # Run test for each resolution
+  for res in $resolutions; do
+    test_num=$((test_num + 1))
+    
+    # Convert resolution to width x height using library function
+    wh=$(gstreamer_resolution_to_wh "$res")
+  if [ -z "$wh" ]; then
+    log_warn "Invalid resolution: $res"
+    failed_tests=$((failed_tests + 1))
+    echo "${lava_testcase_id}_${res} FAIL" >>"$RES_FILE"
+    continue
+  fi
+  
+  test_width=$(echo "$wh" | cut -d' ' -f1)
+  test_height=$(echo "$wh" | cut -d' ' -f2)
+  
+  # Determine test name suffix
+  case "$res" in
+    480p|720p|1080p|2160p|4k)
+      test_suffix=$(echo "$res" | tr '[:lower:]' '[:upper:]' | sed 's/P$/p/')
+      ;;
+    *)
+      test_suffix="${test_width}x${test_height}"
+      ;;
+  esac
+  
+  test_name="${lava_testcase_id}_${test_suffix}"
+  
+  log_info ""
+  log_info "=========================================="
+  log_info "Test $test_num/$total_tests: $test_name"
+  log_info "Resolution: ${test_width}x${test_height}"
+  log_info "=========================================="
+  
+  if run_display_test "$test_width" "$test_height" "$test_name"; then
+    passed_tests=$((passed_tests + 1))
+    echo "$test_name PASS" >>"$RES_FILE"
   else
-    # If mktemp failed, fall back to validating the full GST log
-    if ! gstreamer_validate_log "$GST_LOG" "$TESTNAME"; then
-      gst_log_ok=0
-    fi
+    failed_tests=$((failed_tests + 1))
+    echo "$test_name FAIL" >>"$RES_FILE"
   fi
-  rm -f "${GST_LOG}.tail"
-fi
+done
 
-if [ "$run_log_ok" -eq 0 ] || [ "$gst_log_ok" -eq 0 ]; then
-  result="FAIL"
-  if [ "$run_log_ok" -eq 0 ] && [ "$gst_log_ok" -eq 0 ]; then
-    reason="GStreamer errors detected in both run log and GST debug log"
-  elif [ "$run_log_ok" -eq 0 ]; then
-    reason="GStreamer errors detected in run log"
-  else
-    reason="GStreamer errors detected in GST debug log"
-  fi
+# -------------------- Summary --------------------
+log_info ""
+log_info "=========================================="
+log_info "Multi-Resolution Test Suite Summary"
+log_info "=========================================="
+log_info "Total tests: $total_tests"
+log_info "Passed: $passed_tests"
+log_info "Failed: $failed_tests"
+log_info "=========================================="
+
+# Overall result
+if [ "$failed_tests" -eq 0 ]; then
+  log_pass "${lava_testcase_id} PASS ($passed_tests/$total_tests tests passed)"
+  echo "${lava_testcase_id} PASS" >"$RES_FILE"
 else
-  # First check if it ran long enough
-  if [ "$elapsed" -ge "$min_duration" ]; then
-    # If it ran long enough, check exit code
-    case "$gstRc" in
-      0)  # Normal exit
-        result="PASS"
-        reason="Playback completed successfully (elapsed=${elapsed}/${duration}s)"
-        ;;
-      124)
-        result="FAIL"
-        reason="Playback timed out (timeout=${timeout_sec}s, elapsed=${elapsed}s) - pipeline did not exit cleanly"
-        ;;
-      137|143)
-        result="FAIL"
-        reason="Playback killed by signal (rc=$gstRc, elapsed=${elapsed}s) - unexpected termination"
-        ;;
-      *)  # Unexpected return code
-        result="FAIL"
-        reason="Playback failed with unexpected exit code (rc=$gstRc, elapsed=${elapsed}/${duration}s)"
-        ;;
-    esac
-  else
-    # Didn't run long enough - always fail regardless of return code
-    result="FAIL"
-    reason="Playback exited too quickly (elapsed=${elapsed}s, minimum required=${min_duration}s)"
-  fi
+  log_fail "${lava_testcase_id} FAIL ($failed_tests/$total_tests tests failed)"
+  echo "${lava_testcase_id} FAIL" >"$RES_FILE"
 fi
-
-# Helpful tails on failure (stdout visibility in CI)
-if [ "$result" != "PASS" ]; then
-  log_info "---- gst-launch output (tail) ----"
-  tail -n 120 "$RUN_LOG" 2>/dev/null || true
-  if [ -s "$GST_LOG" ]; then
-    log_info "---- GST debug log (tail) ----"
-    tail -n 120 "$GST_LOG" 2>/dev/null || true
-  fi
-fi
-
-# -------------------- Emit result --------------------
-case "$result" in
-  PASS)
-    log_pass "$TESTNAME $result: $reason"
-    echo "$TESTNAME PASS" >"$RES_FILE"
-    ;;
-  *)
-    log_fail "$TESTNAME $result: $reason"
-    echo "$TESTNAME FAIL" >"$RES_FILE"
-    ;;
-esac
 
 exit 0
