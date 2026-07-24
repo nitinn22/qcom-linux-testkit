@@ -2219,3 +2219,212 @@ gstreamer_verify_rotation() {
   fi
 }
 
+=======
+# ==================== CAMX/qtiqmmfsrc Interactive Test Helpers ====================
+
+#######################################
+# Setup CAMX override settings
+# Arguments:
+#   $@ - Array of CAMX setting commands
+# Returns:
+#   0 on success, 1 on failure
+#######################################
+setup_camx_override_settings() {
+  local camx_file="/var/cache/camera/camxoverridesettings.txt"
+  
+  log_info "Setting up CAMX override settings..."
+  
+  rm -f "$camx_file" 2>/dev/null || true
+  mkdir -p "$(dirname "$camx_file")" 2>/dev/null || true
+  
+  for cmd in "$@"; do
+    if [ -n "$cmd" ]; then
+      eval "$cmd" || {
+        log_error "Failed to apply CAMX setting"
+        return 1
+      }
+    fi
+  done
+  
+  return 0
+}
+
+#######################################
+# Setup standard CAMX logging settings for feature tests
+# Applies the common CAMX override settings used by all feature tests
+# Returns:
+#   0 on success, 1 on failure
+#######################################
+setup_camx_standard_logging() {
+  setup_camx_override_settings \
+    "echo logInfoMask=0xFFFFFFFF >> /var/cache/camera/camxoverridesettings.txt" \
+    "echo IFEDualClockThreshold=600000000 >> /var/cache/camera/camxoverridesettings.txt" \
+    "echo logVerboseMask=0xFFFFFFFF >> /var/cache/camera/camxoverridesettings.txt" \
+    "echo logPerfInfoMask=0xFFFFFFFF >> /var/cache/camera/camxoverridesettings.txt" \
+    "echo logWarningMask=0xFFFFFFFF >> /var/cache/camera/camxoverridesettings.txt"
+}
+
+#######################################
+# Execute gst-pipeline-app with interactive inputs
+# Arguments:
+#   $1 - GST pipeline command
+#   $2 - Space-separated list of inputs
+# Returns:
+#   0 on success, 1 on failure
+# Note: Uses fixed 3 second delay between inputs
+#######################################
+execute_interactive_pipeline() {
+    local app_cmd="$1"
+    local inputs="$2"
+    local delay="${3:-3}"
+
+    if ! command -v expect >/dev/null 2>&1; then
+        log_error "expect tool not found"
+        return 1
+    fi
+
+    local expect_script
+    expect_script=$(mktemp /tmp/gst_interactive_XXXXXX.exp)
+
+    cat > "$expect_script" <<'EXPECT_EOF'
+#!/usr/bin/expect -f
+
+set timeout 120
+
+set app_cmd [lindex $argv 0]
+set inputs  [lindex $argv 1]
+set delay   [lindex $argv 2]
+
+log_user 1
+
+spawn sh -c $app_cmd
+
+# Allow app to initialize
+sleep 2
+
+foreach input $inputs {
+
+    puts "Sending: $input"
+
+    send -- "$input\r"
+
+    if {$input == "q"} {
+        sleep 1
+        break
+    }
+
+    sleep $delay
+}
+
+expect {
+    eof {}
+    timeout {}
+}
+
+exit 0
+EXPECT_EOF
+
+    chmod +x "$expect_script"
+
+    expect "$expect_script" "$app_cmd" "$inputs" "$delay"
+    local result=$?
+
+    rm -f "$expect_script"
+
+    return $result
+}
+
+#######################################
+# Start journal log capture in background
+# Arguments:
+#   $1 - Output log file path
+# Returns:
+#   PID of log capture process (via stdout)
+#######################################
+start_journal_capture() {
+  local log_file="$1"
+  
+  rm -f "$log_file"
+  journalctl -ef -o short-iso-precise > "$log_file" 2>&1 &
+  local pid=$!
+  
+  sleep 2
+  echo "$pid"
+  return 0
+}
+
+#######################################
+# Stop journal log capture
+# Arguments:
+#   $1 - PID of log capture process
+# Returns:
+#   0 on success
+#######################################
+stop_journal_capture() {
+  local pid="$1"
+  
+  if [ -n "$pid" ]; then
+    kill "$pid" 2>/dev/null || true
+    wait "$pid" 2>/dev/null || true
+  fi
+  
+  return 0
+}
+
+#######################################
+# Validate log markers in captured log
+# Arguments:
+#   $1 - Log file path
+#   $@ - Expected markers (remaining arguments)
+# Returns:
+#   0 if all markers found, 1 otherwise
+#######################################
+validate_log_markers() {
+  local log_file="$1"
+  shift
+  local markers=("$@")
+  
+  if [ ! -f "$log_file" ]; then
+    log_error "Log file not found: $log_file"
+    return 1
+  fi
+  
+  local all_found=0
+  for marker in "${markers[@]}"; do
+    if [ -n "$marker" ]; then
+      if grep -q "$marker" "$log_file"; then
+        log_info "[PASS] Found marker: '$marker'"
+      else
+        log_error "[FAIL] Marker not found: '$marker'"
+        all_found=1
+      fi
+    fi
+  done
+  
+  return $all_found
+}
+
+#######################################
+# Build qtiqmmfsrc interactive property test pipeline
+# Arguments:
+#   $1 - camera_id
+#   $2 - output_location (e.g., /opt/frame_WB%d.jpg)
+# Returns:
+#   Pipeline string via stdout
+#######################################
+build_qtiqmmfsrc_interactive_pipeline() {
+  local camera_id="$1"
+  local output_location="$2"
+  
+  printf 'gst-pipeline-app -e qtiqmmfsrc name=camsrc camera=%s video_0::type=preview ! video/x-raw,format=NV12_Q08C,width=1280,height=720,framerate=30/1 ! waylandsink fullscreen=true async=true sync=false camsrc.image_1 ! "image/jpeg,width=1280,height=720,framerate=30/1" ! multifilesink location=%s async=false sync=true enable-last-sample=false' \
+    "$camera_id" "$output_location"
+}
+
+#######################################
+# Build qtiqmmfsrc FRC test pipeline
+# Returns:
+#   Pipeline string via stdout
+#######################################
+build_qtiqmmfsrc_frc_pipeline() {
+  printf 'gst-launch-1.0 -e --gst-debug=fpsdisplaysink:6 qtiqmmfsrc name=qmmf frc-mode=capture-request qmmf.video_0 ! video/x-raw,format=NV12,width=1280,height=720,framerate=17/1 ! fpsdisplaysink name=disp1 signal-fps-measurements=true text-overlay=false video-sink="fakesink" qmmf.video_1 ! video/x-raw,format=NV12,width=1280,height=720,framerate=10/1 ! fpsdisplaysink name=disp2 signal-fps-measurements=true text-overlay=false video-sink="fakesink"'
+}
