@@ -989,6 +989,274 @@ run_qtiqmmf_snapshot_test() {
   fi
 }
 
+# -------------------- qtiqmmfsrc Interactive Property Test Functions --------------------
+
+# TC_001: White Balance - Twilight Mode
+run_qtiqmmf_wb_twilight_test() {
+  local testname="qtiqmmf_wb_twilight_720p"
+  log_info "Format: Interactive Feature Test - White Balance Twilight"
+  
+  setup_camx_standard_logging || return 1
+  
+  local log_file="$OUTDIR/${testname}_journal.log"
+  local log_pid=$(start_journal_capture "$log_file")
+  
+  local gst_cmd=$(build_qtiqmmfsrc_interactive_pipeline "$cameraId" "/opt/frame_WB%d.jpg")
+  local inputs="3 p camsrc 17 10 37 0 5 b q"
+  
+  execute_interactive_pipeline "$gst_cmd" "$inputs" || {
+    stop_journal_capture "$log_pid"
+    log_fail "$testname: FAIL"; fail_count=$((fail_count + 1)); return 1
+  }
+  
+  sleep 2
+  stop_journal_capture "$log_pid"
+  
+  if ! validate_log_markers "$log_file" "Mode:7"; then
+    log_fail "$testname: FAIL"; fail_count=$((fail_count + 1)); return 1
+  fi
+  
+  log_pass "$testname: PASS"; pass_count=$((pass_count + 1)); return 0
+}
+
+# TC_002: Exposure Compensation
+run_qtiqmmf_exposure_comp_test() {
+  local testname="qtiqmmf_exposure_comp_720p"
+  log_info "Format: Interactive Feature Test - Exposure Compensation"
+  
+  setup_camx_standard_logging || return 1
+  
+  local log_file="$OUTDIR/${testname}_journal.log"
+  local log_pid=$(start_journal_capture "$log_file")
+  
+  local gst_cmd=$(build_qtiqmmfsrc_interactive_pipeline "$cameraId" "/opt/frame_EC_10%d.jpg")
+  local inputs="3 p camsrc 14 10 37 0 5 b q"
+  
+  execute_interactive_pipeline "$gst_cmd" "$inputs" || {
+    stop_journal_capture "$log_pid"
+    log_fail "$testname: FAIL"; fail_count=$((fail_count + 1)); return 1
+  }
+  
+  sleep 2
+  stop_journal_capture "$log_pid"
+  
+  if ! validate_log_markers "$log_file" "AECompensation:10"; then
+    log_fail "$testname: FAIL"; fail_count=$((fail_count + 1)); return 1
+  fi
+  
+  log_pass "$testname: PASS"; pass_count=$((pass_count + 1)); return 0
+}
+
+# TC_003: Saturation
+run_qtiqmmf_saturation_test() {
+  local testname="qtiqmmf_saturation_720p"
+  log_info "Format: Interactive Feature Test - Saturation"
+  
+  setup_camx_standard_logging || return 1
+  
+  local log_file="$OUTDIR/${testname}_journal.log"
+  local log_pid=$(start_journal_capture "$log_file")
+  
+  local gst_cmd=$(build_qtiqmmfsrc_interactive_pipeline "$cameraId" "/opt/frame_Saturation0_%d.jpg")
+  local inputs="3 p camsrc 8 0 37 0 5 b q"
+  
+  execute_interactive_pipeline "$gst_cmd" "$inputs" || {
+    stop_journal_capture "$log_pid"
+    log_fail "$testname: FAIL"; fail_count=$((fail_count + 1)); return 1
+  }
+  
+  sleep 2
+  stop_journal_capture "$log_pid"
+  
+  if ! validate_log_markers "$log_file" "saturation 0"; then
+    log_fail "$testname: FAIL"; fail_count=$((fail_count + 1)); return 1
+  fi
+  
+  log_pass "$testname: PASS"; pass_count=$((pass_count + 1)); return 0
+}
+
+# TC_004: Contrast
+run_qtiqmmf_contrast_test() {
+  local testname="qtiqmmf_contrast_720p"
+  log_info "Format: Interactive Feature Test - Contrast"
+  
+  setup_camx_standard_logging || return 1
+  
+  local log_file="$OUTDIR/${testname}_journal.log"
+  local log_pid=$(start_journal_capture "$log_file")
+  
+  local gst_cmd=$(build_qtiqmmfsrc_interactive_pipeline "$cameraId" "/opt/frame_Contrast10_%d.jpg")
+  local inputs="3 p camsrc 7 10 37 0 5 b q"
+  
+  execute_interactive_pipeline "$gst_cmd" "$inputs" || {
+    stop_journal_capture "$log_pid"
+    log_fail "$testname: FAIL"; fail_count=$((fail_count + 1)); return 1
+  }
+  
+  sleep 2
+  stop_journal_capture "$log_pid"
+  
+  if ! validate_log_markers "$log_file" "Manual Contrast Level = 9"; then
+    log_fail "$testname: FAIL"; fail_count=$((fail_count + 1)); return 1
+  fi
+  
+  log_pass "$testname: PASS"; pass_count=$((pass_count + 1)); return 0
+}
+
+# TC_005: Manual Exposure Time
+run_qtiqmmf_manual_exposure_test() {
+  local testname="qtiqmmf_manual_exposure_720p"
+  log_info "Format: Interactive Feature Test - Manual Exposure Time"
+  
+  setup_camx_standard_logging || return 1
+  
+  local log_file="$OUTDIR/${testname}_journal.log"
+  local log_pid=$(start_journal_capture "$log_file")
+  
+  local gst_cmd=$(build_qtiqmmfsrc_interactive_pipeline "$cameraId" "/opt/frame_M-Exp33333_%d.jpg")
+  local inputs="3 p camsrc 11 off 15 33333 37 0 5 b q"
+  
+  execute_interactive_pipeline "$gst_cmd" "$inputs" || {
+    stop_journal_capture "$log_pid"
+    log_fail "$testname: FAIL"; fail_count=$((fail_count + 1)); return 1
+  }
+  
+  sleep 2
+  stop_journal_capture "$log_pid"
+  
+  if ! validate_log_markers "$log_file" "Exposure Time: 33333"; then
+    log_fail "$testname: FAIL"; fail_count=$((fail_count + 1)); return 1
+  fi
+  
+  log_pass "$testname: PASS"; pass_count=$((pass_count + 1)); return 0
+}
+
+# TC_006: Anti-banding 60Hz
+run_qtiqmmf_antibanding_test() {
+  local testname="qtiqmmf_antibanding_720p"
+  log_info "Format: Interactive Feature Test - Anti-banding 60Hz"
+  
+  setup_camx_standard_logging || return 1
+  
+  local log_file="$OUTDIR/${testname}_journal.log"
+  local log_pid=$(start_journal_capture "$log_file")
+  
+  local gst_cmd=$(build_qtiqmmfsrc_interactive_pipeline "$cameraId" "/opt/frame_Antibanding60hz_%d.jpg")
+  local inputs="3 p camsrc 5 2 37 0 5 b q"
+  
+  execute_interactive_pipeline "$gst_cmd" "$inputs" || {
+    stop_journal_capture "$log_pid"
+    log_fail "$testname: FAIL"; fail_count=$((fail_count + 1)); return 1
+  }
+  
+  sleep 2
+  stop_journal_capture "$log_pid"
+  
+  if ! validate_log_markers "$log_file" "InputAntiBandingMode:2"; then
+    log_fail "$testname: FAIL"; fail_count=$((fail_count + 1)); return 1
+  fi
+  
+  log_pass "$testname: PASS"; pass_count=$((pass_count + 1)); return 0
+}
+
+# TC_007: Sharpness
+run_qtiqmmf_sharpness_test() {
+  local testname="qtiqmmf_sharpness_720p"
+  log_info "Format: Interactive Feature Test - Sharpness"
+  
+  setup_camx_standard_logging || return 1
+  
+  local log_file="$OUTDIR/${testname}_journal.log"
+  local log_pid=$(start_journal_capture "$log_file")
+  
+  local gst_cmd=$(build_qtiqmmfsrc_interactive_pipeline "$cameraId" "/opt/frame_Sharpness3_%d.jpg")
+  local inputs="3 p camsrc 6 3 37 0 5 b q"
+  
+  execute_interactive_pipeline "$gst_cmd" "$inputs" || {
+    stop_journal_capture "$log_pid"
+    log_fail "$testname: FAIL"; fail_count=$((fail_count + 1)); return 1
+  }
+  
+  sleep 2
+  stop_journal_capture "$log_pid"
+  
+  if ! validate_log_markers "$log_file" "sharpness 1.5"; then
+    log_fail "$testname: FAIL"; fail_count=$((fail_count + 1)); return 1
+  fi
+  
+  log_pass "$testname: PASS"; pass_count=$((pass_count + 1)); return 0
+}
+
+# TC_008: ISO Mode 800
+run_qtiqmmf_iso_test() {
+  local testname="qtiqmmf_iso800_720p"
+  log_info "Format: Interactive Feature Test - ISO Mode 800"
+  
+  setup_camx_standard_logging || return 1
+  
+  local gst_cmd=$(build_qtiqmmfsrc_interactive_pipeline "$cameraId" "/opt/frame_ISO800_%d.jpg")
+  local inputs="3 p camsrc 9 800 37 0 5 b q"
+  
+  execute_interactive_pipeline "$gst_cmd" "$inputs" || {
+    log_fail "$testname: FAIL"; fail_count=$((fail_count + 1)); return 1
+  }
+  
+  log_pass "$testname: PASS"; pass_count=$((pass_count + 1)); return 0
+}
+
+# TC_009: ADRC
+run_qtiqmmf_adrc_test() {
+  local testname="qtiqmmf_adrc_720p"
+  log_info "Format: Interactive Feature Test - ADRC"
+  
+  setup_camx_standard_logging || return 1
+  
+  local log_file="$OUTDIR/${testname}_journal.log"
+  local log_pid=$(start_journal_capture "$log_file")
+  
+  local gst_cmd=$(build_qtiqmmfsrc_interactive_pipeline "$cameraId" "/opt/frame_ADRC1_%d.jpg")
+  local inputs="3 p camsrc 1 1 37 0 5 b q"
+  
+  execute_interactive_pipeline "$gst_cmd" "$inputs" || {
+    stop_journal_capture "$log_pid"
+    log_fail "$testname: FAIL"; fail_count=$((fail_count + 1)); return 1
+  }
+  
+  sleep 2
+  stop_journal_capture "$log_pid"
+  
+  if ! validate_log_markers "$log_file" "ADRC: 1"; then
+    log_fail "$testname: FAIL"; fail_count=$((fail_count + 1)); return 1
+  fi
+  
+  log_pass "$testname: PASS"; pass_count=$((pass_count + 1)); return 0
+}
+
+# TC_010: Live Stream with FRC
+run_qtiqmmf_frc_test() {
+  local testname="qtiqmmf_frc_720p"
+  log_info "Format: FRC Test - Live Stream"
+  
+  local log_file="$OUTDIR/${testname}_journal.log"
+  local log_pid=$(start_journal_capture "$log_file")
+  
+  local gst_cmd=$(build_qtiqmmfsrc_frc_pipeline)
+  
+  eval "$gst_cmd" &
+  local gst_pid=$!
+  sleep 10
+  kill $gst_pid 2>/dev/null || true
+  
+  sleep 2
+  stop_journal_capture "$log_pid"
+  
+  if ! validate_log_markers "$log_file" "PCR FRC enable"; then
+    log_fail "$testname: FAIL"; fail_count=$((fail_count + 1)); return 1
+  fi
+  
+  log_pass "$testname: PASS"; pass_count=$((pass_count + 1)); return 0
+}
+
 # -------------------- libcamerasrc Test Functions --------------------
 
 # Fakesink test (parameterized)
@@ -1383,6 +1651,42 @@ else
               ;;
           esac
         done
+        ;;
+      features)
+        log_info "=========================================="
+        log_info "QTIQMMFSRC INTERACTIVE FEATURE TESTS"
+        log_info "=========================================="
+        
+        # Run all 10 interactive property tests
+        total_tests=$((total_tests + 1))
+        run_qtiqmmf_wb_twilight_test || true
+        
+        total_tests=$((total_tests + 1))
+        run_qtiqmmf_exposure_comp_test || true
+        
+        total_tests=$((total_tests + 1))
+        run_qtiqmmf_saturation_test || true
+        
+        total_tests=$((total_tests + 1))
+        run_qtiqmmf_contrast_test || true
+        
+        total_tests=$((total_tests + 1))
+        run_qtiqmmf_manual_exposure_test || true
+        
+        total_tests=$((total_tests + 1))
+        run_qtiqmmf_antibanding_test || true
+        
+        total_tests=$((total_tests + 1))
+        run_qtiqmmf_sharpness_test || true
+        
+        total_tests=$((total_tests + 1))
+        run_qtiqmmf_iso_test || true
+        
+        total_tests=$((total_tests + 1))
+        run_qtiqmmf_adrc_test || true
+        
+        total_tests=$((total_tests + 1))
+        run_qtiqmmf_frc_test || true
         ;;
       *)
         log_warn "Unknown test mode: $mode"

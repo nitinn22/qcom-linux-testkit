@@ -3,8 +3,8 @@
 ## Overview
 
 Validates camera functionality using GStreamer with two camera source plugins:
-- **qtiqmmfsrc** (Qualcomm CAMX downstream) - 10 tests
-- **libcamerasrc** (upstream) - 7 tests
+- **qtiqmmfsrc** (Qualcomm CAMX downstream) - 22 tests (12 standard + 10 interactive feature tests)
+- **libcamerasrc** (upstream) - 9 tests
 
 Auto-detects available plugin (prioritizes qtiqmmfsrc). Use `--plugin` to explicitly select.
 
@@ -20,6 +20,7 @@ Auto-detects available plugin (prioritizes qtiqmmfsrc). Use `--plugin` to explic
 - `qtiqmmfsrc` - Qualcomm camera source
 - `v4l2h264enc` - H.264 encoder (for encode tests)
 - `waylandsink` - Display sink (for preview tests)
+- `expect` - Interactive automation tool (for feature tests only)
 
 **libcamerasrc:**
 - `libcamerasrc` - Upstream camera source
@@ -34,7 +35,9 @@ Auto-detects available plugin (prioritizes qtiqmmfsrc). Use `--plugin` to explic
 
 ## Test Matrix
 
-### qtiqmmfsrc Tests (12 Total)
+### qtiqmmfsrc Tests (22 Total)
+
+#### Standard Tests (12)
 
 | Category | Tests | Formats | Resolutions | Description |
 |----------|-------|---------|-------------|-------------|
@@ -43,10 +46,33 @@ Auto-detects available plugin (prioritizes qtiqmmfsrc). Use `--plugin` to explic
 | Encode | 6 | NV12, UBWC | 720p, 1080p, 4K | H.264 encoding to MP4 |
 | Snapshot | 2 | NV12 | 1080p, 4K | JPEG still image capture |
 
+#### Interactive Feature Tests (10)
+
+| Test | Feature | Description | Log Validation |
+|------|---------|-------------|----------------|
+| TC_001 | White Balance | Twilight mode (value: 10) | Mode:7 |
+| TC_002 | Exposure Compensation | EC value: 10 | AECompensation:10 |
+| TC_003 | Saturation | Saturation value: 0 | saturation 0 |
+| TC_004 | Contrast | Contrast value: 10 | Manual Contrast Level = 9 |
+| TC_005 | Manual Exposure | Exposure time: 33333μs | Exposure Time: 33333 |
+| TC_006 | Anti-banding | 60Hz mode (value: 2) | InputAntiBandingMode:2 |
+| TC_007 | Sharpness | Sharpness value: 3 | sharpness 1.5 |
+| TC_008 | ISO Mode | ISO 800 | (No validation) |
+| TC_009 | ADRC | ADRC enabled (value: 1) | ADRC: 1 |
+| TC_010 | FRC | Frame Rate Control | PCR FRC enable |
+
+**Feature Test Notes:**
+- Uses `gst-pipeline-app` with automated interactive inputs
+- 3-second delay between inputs (fixed)
+- Captures journalctl logs for validation
+- Applies CAMX override settings for detailed logging
+- All tests run at 720p@30fps resolution
+
 **Format Notes:**
 - **NV12**: Standard linear format (universal support)
 - **UBWC**: Qualcomm compressed format (Qualcomm optimized)
 - **Snapshot**: Uses NV12 format only
+- **Feature Tests**: Use NV12_Q08C (UBWC) format
 
 ### libcamerasrc Tests (9 Total)
 
@@ -71,7 +97,7 @@ Auto-detects available plugin (prioritizes qtiqmmfsrc). Use `--plugin` to explic
 
 --camera-id <id>        Camera device ID (qtiqmmfsrc only, default: 0)
 --plugin <name>         Plugin: qtiqmmfsrc, libcamerasrc, auto (default: auto)
---test-modes <list>     Modes: fakesink,preview,encode,snapshot (default: all)
+--test-modes <list>     Modes: fakesink,preview,encode,snapshot,features (default: all except features)
 --formats <list>        Formats: nv12,ubwc (qtiqmmfsrc only, default: both)
 --resolutions <list>    Resolutions: 720p,1080p,4k (default: all)
 --framerate <fps>       Framerate (default: 30)
@@ -107,8 +133,14 @@ Auto-detects available plugin (prioritizes qtiqmmfsrc). Use `--plugin` to explic
 ./run.sh --plugin qtiqmmfsrc --test-modes fakesink
 ./run.sh --plugin libcamerasrc --test-modes preview,encode
 
+# Run qtiqmmfsrc interactive feature tests (10 tests)
+./run.sh --plugin qtiqmmfsrc --test-modes features
+
 # Run libcamerasrc snapshot tests (2 tests: 1080p and 4K)
 ./run.sh --plugin libcamerasrc --test-modes snapshot
+
+# Run all qtiqmmfsrc tests including features (22 tests total)
+./run.sh --plugin qtiqmmfsrc --test-modes fakesink,preview,encode,snapshot,features
 
 # Test specific formats/resolutions
 ./run.sh --plugin qtiqmmfsrc --formats nv12 --resolutions 720p,1080p
@@ -201,6 +233,51 @@ sudo usermod -a -G video $USER
    - Preview tests require Weston compositor
    - Tests will be skipped if Weston not available
 
+## Interactive Feature Tests (qtiqmmfsrc only)
+
+The "features" test mode runs 10 automated interactive tests that validate camera property controls:
+
+### Prerequisites
+- `expect` tool for interactive automation (install with package manager if not present)
+- CAMX logging enabled (automatically configured)
+
+### Test Details
+- **Resolution**: 720p@30fps (fixed)
+- **Format**: NV12_Q08C (UBWC)
+- **Input Delay**: 3 seconds between commands (fixed)
+- **Validation**: Journalctl log markers
+
+### Running Feature Tests
+```bash
+# Run all 10 feature tests
+./run.sh --plugin qtiqmmfsrc --test-modes features
+
+# Run features with other tests
+./run.sh --plugin qtiqmmfsrc --test-modes fakesink,features
+
+# Run complete qtiqmmfsrc test suite (22 tests)
+./run.sh --plugin qtiqmmfsrc --test-modes fakesink,preview,encode,snapshot,features
+```
+
+### Feature Test Workflow
+1. Apply CAMX override settings for detailed logging
+2. Start journalctl log capture in background
+3. Launch gst-pipeline-app with interactive inputs
+4. Automated input sequence (3s delay between inputs):
+   - Set pipeline to PLAYING
+   - Access plugin properties
+   - Configure feature value
+   - Capture snapshots
+   - Exit pipeline
+5. Stop log capture
+6. Validate expected markers in logs
+
+### Troubleshooting Feature Tests
+- **expect not found**: Install expect tool using your package manager
+- **Log markers not found**: Check journalctl is capturing logs
+- **Pipeline timeout**: Increase timeout if device is slow
+- **CAMX settings not applied**: Verify write permissions to `/var/cache/camera/`
+
 ## Notes
 
 - Auto-detection prioritizes qtiqmmfsrc when both available
@@ -210,3 +287,6 @@ sudo usermod -a -G video $USER
 - libcamerasrc requires `videoconvert` element
 - All tests clean up GStreamer processes on exit
 - LAVA-compatible (always exits 0)
+- Feature tests use fixed 3-second delay between inputs
+- Feature tests require `expect` tool for interactive automation
+
