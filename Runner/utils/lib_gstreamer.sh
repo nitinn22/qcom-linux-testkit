@@ -2269,9 +2269,9 @@ setup_camx_standard_logging() {
 # Arguments:
 #   $1 - GST pipeline command
 #   $2 - Space-separated list of inputs
+#   $3 - Delay between inputs in seconds (optional, default: 3)
 # Returns:
 #   0 on success, 1 on failure
-# Note: Uses fixed 3 second delay between inputs
 #######################################
 execute_interactive_pipeline() {
     local app_cmd="$1"
@@ -2279,9 +2279,18 @@ execute_interactive_pipeline() {
     local delay="${3:-3}"
 
     if ! command -v expect >/dev/null 2>&1; then
-        log_error "expect tool not found"
+        log_error "expect tool not found, cannot execute pipeline.."
         return 1
     fi
+
+    # Log the pipeline command and inputs
+    log_info "=========================================="
+    log_info "Interactive Pipeline Execution"
+    log_info "=========================================="
+    log_info "Pipeline command: $app_cmd"
+    log_info "Input sequence: $inputs"
+    log_info "Delay between inputs: ${delay} seconds"
+    log_info "=========================================="
 
     local expect_script
     expect_script=$(mktemp /tmp/gst_interactive_XXXXXX.exp)
@@ -2304,15 +2313,17 @@ sleep 2
 
 foreach input $inputs {
 
-    puts "Sending: $input"
+    puts ">>> Sending input: $input"
 
     send -- "$input\r"
 
     if {$input == "q"} {
+        puts ">>> Quit command sent, waiting 1 second before exit..."
         sleep 1
         break
     }
 
+    puts ">>> Waiting ${delay} seconds before next input..."
     sleep $delay
 }
 
