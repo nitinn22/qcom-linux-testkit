@@ -111,6 +111,11 @@ cleanup() {
   # Only kill gst-launch-1.0 processes that are children of this shell
   # This prevents killing unrelated GStreamer pipelines running on the system
   pkill -P "$$" -x gst-launch-1.0 >/dev/null 2>&1 || true
+  
+  # Cleanup Wayland/Weston if started by camera_setup_wayland_environment
+  if command -v camera_cleanup_wayland_environment >/dev/null 2>&1; then
+    camera_cleanup_wayland_environment
+  fi
 }
 trap cleanup INT TERM EXIT
 
