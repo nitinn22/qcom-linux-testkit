@@ -1,0 +1,192 @@
+# Multimedia Sample Apps Configuration
+# This file defines all sample applications across audio, video, display, and camera categories
+
+description: GStreamer multimedia sample applications validation (audio, video, display, camera)
+
+# Build Configuration:
+# - Config1 (Upstream): 16 apps total (2 audio + 7 video + 7 camera + 0 display)
+# - Config2 (CAMX/Downstream): 33 apps total (2 audio + 10 video + 20 camera + 1 display)
+# Auto-detected based on qtiqmmfsrc plugin availability
+
+# Default settings
+defaults:
+  timeout: 30
+  validation:
+    - check: exit_code
+      expected: [0, 124]  # 0 = clean exit, 124 = timeout (acceptable for continuous apps)
+    - check: no_gst_errors
+      enabled: true
+
+# Sample applications organized by category
+categories:
+  
+  # MM_Audio Applications (available in both Config1 and Config2)
+  audio:
+    - name: gst-audio-encode-example
+      description: Audio encoding example
+      timeout: 30
+      
+    - name: gst-audio-decode-example
+      description: Audio decoding example
+      timeout: 30
+
+  # MM_Video Applications
+  video:
+    # Common apps (available in both Config1 and Config2)
+    - name: gst-concurrent-videoplay-composition
+      description: Concurrent video playback with composition
+      timeout: 30
+      
+    - name: gst-concurrent-videoplay-composition.py
+      description: Concurrent video playback with composition (Python)
+      timeout: 30
+      
+    - name: gst-videocodec-concurrent-playback
+      description: Concurrent video codec playback
+      timeout: 30
+      
+    - name: gst-audio-video-playback
+      description: Audio and video playback
+      timeout: 30
+      
+    - name: gst-video-transcode-example
+      description: Video transcoding example
+      timeout: 30
+      
+    - name: gst-video-playback-example
+      description: Basic video playback example
+      timeout: 30
+      
+    - name: gst-opencv-transform.py
+      description: OpenCV transform example (Python)
+      timeout: 30
+    
+    # Config2-only apps
+    - name: gst-smartcodec-example
+      description: Smart codec example (Config2 only)
+      timeout: 30
+      build_config: config2
+      
+    - name: gst-audio-video-encode
+      description: Audio and video encoding (Config2 only)
+      timeout: 30
+      build_config: config2
+      
+    - name: gst-ai-smartcodec-example
+      description: AI-enhanced smart codec example (Config2 only)
+      timeout: 30
+      build_config: config2
+
+  # MM_Camera Applications
+  camera:
+    # Common apps (available in both Config1 and Config2)
+    - name: gst-camera-single-stream-example
+      description: Single camera stream example
+      timeout: 30
+      
+    - name: gst-appsink-example
+      description: Appsink example
+      timeout: 30
+      
+    - name: gst-transform-example
+      description: Transform example
+      timeout: 30
+      
+    - name: gst-camera-opencv-resize.py
+      description: Camera OpenCV resize example (Python)
+      timeout: 30
+      
+    - name: GstD-camera-single-stream-example
+      description: GstD camera single stream example
+      timeout: 30
+      
+    - name: gst-camera-encode.py
+      description: Camera encoding example (Python)
+      timeout: 30
+      
+    - name: gst-camera-rotate-downscale-file.py
+      description: Camera rotate and downscale to file (Python)
+      timeout: 30
+    
+    # Config2-only apps (require qtiqmmfsrc)
+    - name: gst-multi-camera-example
+      description: Multiple camera example (Config2 only - requires qtiqmmfsrc)
+      timeout: 30
+      build_config: config2
+      
+    - name: gst-multi-stream-example
+      description: Multiple stream example (Config2 only - requires qtiqmmfsrc)
+      timeout: 30
+      build_config: config2
+      
+    - name: gst-snapshot-stream-example
+      description: Snapshot stream example (Config2 only - requires qtiqmmfsrc)
+      timeout: 30
+      build_config: config2
+      
+    - name: gst-activate-deactivate-streams-runtime-example
+      description: Runtime stream activation/deactivation (Config2 only - requires qtiqmmfsrc)
+      timeout: 30
+      build_config: config2
+      
+    - name: gst-add-remove-streams-runtime
+      description: Runtime stream add/remove (Config2 only - requires qtiqmmfsrc)
+      timeout: 30
+      build_config: config2
+      
+    - name: gst-camera-metadata-example
+      description: Camera metadata example (Config2 only - requires qtiqmmfsrc)
+      timeout: 30
+      build_config: config2
+      
+    - name: gst-add-streams-as-bundle-example
+      description: Add streams as bundle example (Config2 only - requires qtiqmmfsrc)
+      timeout: 30
+      build_config: config2
+      
+    - name: gst-camera-burst-capture-example
+      description: Camera burst capture example (Config2 only - requires qtiqmmfsrc)
+      timeout: 30
+      build_config: config2
+      
+    - name: gst-camera-switch-example
+      description: Camera switch example (Config2 only - requires qtiqmmfsrc)
+      timeout: 30
+      build_config: config2
+      
+    - name: gst-camera-shdr-ldc-eis-example
+      description: Camera SHDR/LDC/EIS example (Config2 only - requires qtiqmmfsrc)
+      timeout: 30
+      build_config: config2
+      
+    - name: gst-multi-camera-stream-example.py
+      description: Multiple camera stream example (Python, Config2 only - requires qtiqmmfsrc)
+      timeout: 30
+      build_config: config2
+      
+    - name: gst-jpg-image-decode.py
+      description: JPEG image decode example (Python, Config2 only - requires qtiqmmfsrc)
+      timeout: 30
+      build_config: config2
+      
+    - name: gst-jpg-decode-example
+      description: JPEG decode example (Config2 only - requires qtiqmmfsrc)
+      timeout: 30
+      build_config: config2
+
+  # MM_Display Applications
+  display:
+    # Config2-only app
+    - name: gst-weston-composition-example
+      description: Weston composition example with GStreamer (Config2 only)
+      timeout: 30
+      build_config: config2
+
+# Notes:
+# - Apps are executed from /usr/bin/ with no additional parameters
+# - Timeout of 30 seconds with SIGINT (Ctrl+C) termination
+# - Exit code 0 or 124 (timeout) are considered success
+# - GStreamer error validation is performed on all apps
+# - Build configuration is auto-detected based on qtiqmmfsrc availability
+# - Config1 (upstream): 16 apps (2 audio + 7 video + 7 camera + 0 display)
+# - Config2 (CAMX/downstream): 33 apps (2 audio + 10 video + 20 camera + 1 display)
